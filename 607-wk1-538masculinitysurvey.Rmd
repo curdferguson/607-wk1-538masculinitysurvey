@@ -1,0 +1,168 @@
+---
+title: "Wk 1 - FiveThirtyEight Masculinity Survey"
+author: "Tyler Frankenberg"
+date: "2021-02-07"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(stringr)
+
+```
+
+## Men's  Attitudes about Manliness, by Age group
+
+In the FiveThirtyEight post "What Do Men Think It Means To Be A Man?" <https://fivethirtyeight.com/features/what-do-men-think-it-means-to-be-a-man/>, the authors examine responses to a 2019 survey to see if American men's attitudes about masculinity vary across regions and within demographics.  This analysis will use a subset of the raw survey responses to determine whether men of different age groups have different attitudes about masculinity.
+
+## Step 1: Load the Data
+
+We begin by reading the raw data .csv directly from FiveThirtyEight's GitHub repository.
+
+```{r load-data}
+
+raw_responses <- read.csv(url(
+  "https://raw.githubusercontent.com/fivethirtyeight/data/master/masculinity-survey/raw-responses.csv"))
+
+```
+
+## Step 2: Subset Rename the Columns
+
+We then select a subset of only the relevant columns in a new dataframe, and give them more informative headings.  We are interested in two questions:
+
+**Question 1**: "In general, how masculine or 'manly' do you feel?"
+
+**Question 2**: "How important is it to you that others see you as masculine?"
+
+
+```{r subset-relevant-columns}
+
+responses_sub1 <- as.data.frame(raw_responses[, c("q0001", "q0002","age3")])
+
+colnames(responses_sub1) <- c("Q1", "Q2", "Age_Group")
+  
+```
+
+
+## Step 3: Aggregate the responses to questions 1 and 2 by Age Group
+
+We use table() to aggregate the total number of responses given for each multiple choice option, for each Age Group.  We also use the subset() function to create separate dataframes for each Age Group, for each question.
+
+```{r aggregate-by-age}
+
+## For each question, we use table() to aggregate the total number of responses for each multiple choice question:
+Q1Counts <- data.frame(table(responses_sub1$Q1, responses_sub1$Age_Group))
+Q2Counts <- data.frame(table(responses_sub1$Q2, responses_sub1$Age_Group))
+
+## For question 1, subset the data into a unique data frame for each Age Group
+Q1Counts_young <- subset(Q1Counts, Var2 == "18 - 34")
+Q1Counts_mid <- subset(Q1Counts, Var2 == "35 - 64")
+Q1Counts_old <- subset(Q1Counts, Var2 == "65 and up")
+
+## Repeat for question 2
+Q2Counts_young <- subset(Q2Counts, Var2 == "18 - 34")
+Q2Counts_mid <- subset(Q2Counts, Var2 == "35 - 64")
+Q2Counts_old <- subset(Q2Counts, Var2 == "65 and up")
+
+```
+
+## Step 4: Calculate percentage by Age Group
+
+Use the results of our table() and subset() functions to calculate the total responses by age group, and the percentage of total responses by age group for each multiple choice option.
+
+
+``` {r calc-percent} 
+
+## Mutate the Q1Counts dataframe to include a column with the appropriate denominator for each age group. 
+Q1Counts <- Q1Counts %>%  
+  mutate(AgeGroupTotal1 = 
+         ifelse(Q1Counts$Var2 == "18 - 34", 
+                sum(Q1Counts_young$Freq),
+                ifelse(Q1Counts$Var2 == "35 - 64", 
+                       sum(Q1Counts_mid$Freq), 
+                       sum(Q1Counts_old$Freq)
+                )
+         )
+         )
+
+## Mutate the Q1Counts dataframe to include a column displaying percentage of total responses by age group for each multiple choice option.
+Q1Counts <- Q1Counts %>%
+    mutate(Proportion = Freq/AgeGroupTotal1)
+
+
+##Repeat both steps for the Q2Counts dataframe
+
+## ## Mutate the Q2Counts dataframe to include a column with the appropriate denominator for each age group. 
+Q2Counts <- Q2Counts %>%  
+  mutate(AgeGroupTotal2 = 
+         ifelse(Q2Counts$Var2 == "18 - 34", 
+                sum(Q2Counts_young$Freq),
+                ifelse(Q2Counts$Var2 == "35 - 64", 
+                       sum(Q2Counts_mid$Freq), 
+                       sum(Q2Counts_old$Freq)
+                )
+         )
+         )
+
+## Mutate the Q2Counts dataframe to include a column displaying percentage of total responses by age group for each multiple choice option.
+Q2Counts <- Q2Counts %>%
+    mutate(Proportion = Freq/AgeGroupTotal2)
+
+```
+
+
+## Step 5: Graph the results
+
+We'll create a column graph for each question using **ggplot2**, that allows us to examine differences in the percentage of respondents of each age group choosing each multiple choice option.
+
+```{r graph-age}
+
+##Graph of Question 1
+ggplot(data = Q1Counts, aes(x = Var1, y = Proportion, group = Var2, 
+                            fill = Var2)) + 
+  geom_col(position="dodge") + 
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) + 
+  labs(title="In general, how masculine or 'manly' do you feel?", 
+       subtitle="Percentage of Responses by Age Group",
+       y="Percentage of Respondents", x="Answer Given",
+       caption="from SurveyMonkey/ FiveThirtyEight, 2019")
+
+##Graph of Question 2
+ggplot(data = Q2Counts, aes(x = Var1, y = Proportion, group = Var2, 
+                            fill = Var2)) + 
+  geom_col(position="dodge") + 
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) + 
+  labs(title="How important is it to you that others see you as masculine?", 
+       subtitle="Percentage of Responses by Age Group",
+       y="Percentage of Respondents", x="Answer Given",
+       caption="from SurveyMonkey/ FiveThirtyEight, 2019")
+
+## the 'scale_x_discrete' ggplot element was copied from: https://stackoverflow.com/a/21894897
+
+```
+
+## So, do men of different age groups have different attitudes about masculinity?
+
+After examining our column graphs, it is clear that attitudes about masculinity differ between men of different age groups.
+
+In response to **Question 1**, it is clear that 18-34 year old respondents are more likely than their older counterparts to characterize themselves as "Not at all masculine" or "Not very masculine."  This suggests a generational shift toward greater self-awareness or acceptance of alternatives to traditional masculinity.
+
+Responses to **Question 2**, however, indicate a slightly more complex picture.  On one hand, the youngest generation surveyed rated the value they assign to their perceived masculinity as "Not at all important" by 5 percentage points more than the other generations surveyed. This would support the theory of a generational shift toward acceptance of alternatives to traditional ideas of masculinity.  On the other hand, the percentage of respondents choosing "Very Important" rises with each generation, indicating a greater degree of polarization on this topic amongst younger respondents than their older counterparts.
+
+## A note about generalization
+
+This analysis does not factor in the weights calculated by FiveThirtyEight to reflect the demographic composition of the United States.  Weighting should be factored in before generalizing conclusions about these survey results to the American public at large.
+
+
+## Dataset Description
+
+From <https://github.com/fivethirtyeight/data/tree/master/masculinity-survey>:
+
+"This directory contains data behind the story "What Do Men Think It Means To Be A Man?" <https://fivethirtyeight.com/features/what-do-men-think-it-means-to-be-a-man/>.
+
+**masculinity-survey.csv** contains the results of a survey of 1,615 adult men conducted by SurveyMonkey in     partnership with FiveThirtyEight and WNYC Studios from May 10-22, 2018. The modeled error estimate for this survey is plus or minus 2.5 percentage points. The percentages have been weighted for age, race, education, and geography using the Census Bureau’s American Community Survey to reflect the demographic composition of the United States age 18 and over. Crosstabs with less than 100 respondents have been left blank because responses would not be statistically significant.
+
+**raw-responses.csv** contains all 1,615 responses to the survey including the weights for each response. Responses to open-ended questions have been omitted, including those where a respondent explained what they meant by selecting the 'other' option in response to a question."
